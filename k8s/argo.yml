@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-flask-app
+  namespace: argo
+spec:
+  project: default
+  source:
+    # REPLACE THIS with your actual GitHub repository URL
+    repoURL: https://github.com/tuheen27/python-application-Kubernetes.git
+    targetRevision: HEAD
+    # The folder inside your repo where web-app.yml and loadblancer.yml are
+    path: k8s 
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default # The namespace where the app will be deployed
+  syncPolicy:
+    automated:
+      prune: true      # Deletes resources that are no longer in Git
+      selfHeal: true   # Fixes manual changes made in the cluster
