@@ -11,9 +11,14 @@ spec:
     metadata:
       labels:
         app: my-webapp
+
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
       - name: my-webapp
-        image: tuheen27/k8s-application:v0.0 
+        image: tuheen27/k8s-application:v0.1 
         ports:
         - containerPort: 5000
