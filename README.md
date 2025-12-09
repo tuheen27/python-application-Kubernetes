@@ -1,74 +1,47 @@
-# End-to-End DevOps: Python Microservice with GitOps & Observability
+# Kubernetes Python App with Monitoring (Prometheus & Grafana)
 
-![Project Status](https://img.shields.io/badge/status-active-success)
-![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=flat&logo=kubernetes&logoColor=white)
-![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
-![Python](https://img.shields.io/badge/python-3670A0?style=flat&logo=python&logoColor=ffdd54)
-![ArgoCD](https://img.shields.io/badge/Argo%20CD-orange?style=flat&logo=argo&logoColor=white)
-![Grafana](https://img.shields.io/badge/grafana-%23F46800.svg?style=flat&logo=grafana&logoColor=white)
+This guide documents the steps to build a Python Flask application, deploy it to Kubernetes using Argo CD, and set up a complete monitoring stack with Prometheus and Grafana.
 
-## 📋 Project Overview
-
-This project demonstrates a complete **DevOps lifecycle** for a Python Flask microservice. It showcases the implementation of **Containerization**, **Orchestration**, **GitOps**, and **Observability** best practices.
-
-The application is containerized using Docker, deployed to a Kubernetes cluster, managed via Argo CD for continuous delivery, and monitored using a full Prometheus & Grafana stack with custom metrics.
-
-### 🚀 Key Features & Skills Demonstrated
-- **Containerization**: Optimized Dockerfile for Python Flask application.
-- **Kubernetes Orchestration**: Deployment, Service (LoadBalancer), and Pod management.
-- **GitOps Workflow**: Automated application synchronization using **Argo CD**.
-- **Observability**: Real-time monitoring with **Prometheus** (scraping custom metrics) and **Grafana** (visualizing request rates, latency, and pod health).
-- **Infrastructure as Code (IaC)**: Declarative YAML manifests for all resources.
+## Prerequisites
+- Docker
+- Kubernetes Cluster (Minikube, Docker Desktop, or Cloud Provider)
+- `kubectl` CLI
+- `helm` CLI
 
 ---
 
-## 🛠️ Tech Stack
+## Step 1: Build and Push Docker Image
 
-| Category | Technology |
-|----------|------------|
-| **Application** | Python, Flask, Prometheus-Flask-Exporter |
-| **Containerization** | Docker, Docker Hub |
-| **Orchestration** | Kubernetes (K8s), Minikube/WSL |
-| **CI/CD** | Argo CD (GitOps) |
-| **Monitoring** | Prometheus, Grafana, Helm Charts |
-| **Scripting** | Bash, PowerShell |
+1. **Build the image**:
+   ```bash
+   docker build -t tuheen27/k8s-application:v0.1 .
+   ```
 
----
-
-## 🏗️ Architecture
-
-```mermaid
-graph LR
-    A[Developer] -->|Push Code| B[GitHub Repo]
-    B -->|Trigger| C[Argo CD]
-    C -->|Sync Manifests| D[Kubernetes Cluster]
-    D -->|Deploy| E[Flask Pods]
-    F[Prometheus] -->|Scrape Metrics| E
-    G[Grafana] -->|Query| F
-```
+2. **Push to Docker Hub**:
+   ```bash
+   docker push tuheen27/k8s-application:v0.1
+   ```
 
 ---
 
-## 📖 Deployment Guide
+## Step 2: Deploy Application (Manual Method)
 
-### Prerequisites
-- Docker installed & running
-- Kubernetes Cluster (Minikube, Docker Desktop, or Cloud)
-- `kubectl` and `helm` CLIs installed
-
-### Step 1: Build & Publish Artifacts
-Build the Docker image and push it to the registry.
+If you want to deploy directly without Argo CD:
 
 ```bash
-# Build Image
-docker build -t tuheen27/k8s-application:v0.1 .
-
-# Push to Docker Hub
-docker push tuheen27/k8s-application:v0.1
+kubectl apply -f k8s/web-app.yml
+kubectl apply -f k8s/loadblancer.yml
 ```
 
-### Step 2: Infrastructure Setup (GitOps)
-We use Argo CD to manage the deployment state.
+To access the app locally:
+```bash
+kubectl port-forward svc/my-webapp-service 8080:5000
+```
+Visit: [http://localhost:8080](http://localhost:8080)
+
+---
+
+## Step 3: Deploy via Argo CD (GitOps Method)
 
 1. **Install Argo CD**:
    ```bash
@@ -76,55 +49,77 @@ We use Argo CD to manage the deployment state.
    kubectl apply -n argo -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
    ```
 
-2. **Retrieve Admin Password**:
+2. **Get Initial Password**:
    ```bash
    kubectl -n argo get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
    ```
 
-3. **Deploy Application Manifest**:
+3. **Fix Permissions (Important)**:
+   If you see "Permission Denied" errors, patch the ClusterRoleBinding:
+   ```bash
+   kubectl edit clusterrolebinding argocd-application-controller
+   # Change the namespace in the "subjects" section from 'argocd' to 'argo'
+   ```
+
+4. **Apply Application Manifest**:
    ```bash
    kubectl apply -f k8s/argo.yml
    ```
-   *Note: Ensure ClusterRoleBinding permissions are correct if using a custom namespace.*
 
-### Step 3: Observability Stack (Prometheus & Grafana)
-Deploy the monitoring stack using Helm.
+---
 
-1. **Install Kube-Prometheus Stack**:
+## Step 4: Setup Monitoring (Prometheus & Grafana)
+
+We use the `kube-prometheus-stack` Helm chart.
+
+1. **Add Helm Repo**:
    ```bash
    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
    helm repo update
+   ```
+
+2. **Install Stack**:
+   ```bash
    helm install prometheus prometheus-community/kube-prometheus-stack
    ```
 
-2. **Access Grafana Dashboard**:
+3. **Access Grafana**:
    ```bash
-   # Get Grafana Admin Password
+   # Get Admin Password
    kubectl get secrets prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d
 
-   # Port Forward to Localhost
+   # Port Forward
    kubectl port-forward svc/prometheus-grafana 3000:80
    ```
-   > Access at: **http://localhost:3000** (User: `admin`)
-
-### Step 4: Configuration & Visualization
-
-1. **Fix Data Source Connection**:
-   - In Grafana, go to **Data Sources > Prometheus**.
-   - Update URL to internal K8s DNS: `http://prometheus-kube-prometheus-prometheus.default:9090`
-   - Click **Save & Test**.
-
-2. **Import Dashboard**:
-   - Import Dashboard ID `11074` or use the custom JSON provided in the repo.
-   - View real-time metrics for **Requests/sec**, **Latency**, and **Active Pods**.
+   Visit: [http://localhost:3000](http://localhost:3000) (User: `admin`)
 
 ---
 
-## 🔧 Troubleshooting
+## Step 5: Configure Grafana Data Source
 
-- **Grafana Connection Refused**: Ensure you are using the internal service DNS (`prometheus-kube-prometheus-prometheus.default`) instead of `localhost` within the Grafana configuration.
-- **Argo CD Sync Issues**: Verify the `targetRevision` in `argo.yml` matches your branch name (`main` or `master`).
+By default, Grafana might try to connect to `localhost`. You need to point it to the K8s Service DNS.
+
+1. Go to **Configuration** -> **Data Sources** -> **Prometheus**.
+2. Change the **URL** to:
+   ```text
+   http://prometheus-kube-prometheus-prometheus.default:9090
+   ```
+3. Click **Save & Test**.
 
 ---
 
-*Author: Tuheen27*
+## Step 6: Import Dashboard
+
+1. Go to **Dashboards** -> **New** -> **Import**.
+2. Paste the JSON provided in the project documentation (or use ID `11074` for a generic Flask dashboard).
+3. You should now see metrics for:
+   - Requests per second
+   - Latency
+   - Active Pods
+
+---
+
+## Troubleshooting
+
+- **Connection Refused in Grafana**: Ensure you are using the internal DNS URL (`http://prometheus-kube-prometheus-prometheus.default:9090`) and not `localhost`.
+- **Argo CD Sync Failed**: Check the `ClusterRoleBinding` namespace issue mentioned in Step 3.
